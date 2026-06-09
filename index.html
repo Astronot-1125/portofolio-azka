@@ -1,42 +1,255 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="id">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Portfolio | Muhammad Azka</title>
-  <link rel="stylesheet" href="style.css">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Black Hole — HTML + CSS + JS</title>
+  <style>
+    html,body{height:100%;margin:0;background:#000;overflow:hidden;font-family:sans-serif}
+    #canvas{display:block;width:100vw;height:100vh}
+    .ui{position:fixed;left:12px;top:12px;color:#ddd;background:rgba(0,0,0,0.35);backdrop-filter:blur(4px);padding:8px;border-radius:8px;font-size:13px}
+    a{color:#8ec5ff}
+    /* small responsive note */
+    @media (max-width:600px){.ui{font-size:12px;padding:6px}}
+  </style>
 </head>
 <body>
+  <canvas id="canvas"></canvas>
+  <div class="ui">Black Hole demo — simpan sebagai <code>index.html</code> dan buka di browser.</div>
 
-  <!-- NAVBAR -->
-  <nav>
-    <a href="index.html">Home</a>
-    <a href="about.html">About</a>
-    <a href="portfolio.html">Portfolio</a>
-    <a href="contact.html">Contact</a>
-  </nav>
+  <script>
+  // ------------------ CONFIG ------------------
+  const CONFIG = {
+    starCount: 300,        // bintang latar
+    diskParticleCount: 600,// partikel piringan akresi
+    diskInner: 80,         // radius dalam piringan (px)
+    diskOuter: 260,        // radius luar piringan (px)
+    spin: 1.0,             // kecepatan rotasi dasar
+    lensingStrength: 700,  // seberapa kuat efek lensa gravitasi (besar = kuat)
+    glowIntensity: 5.0,    // intensitas cahaya cincin
+    backgroundGradient: ['#0a0018', '#210042', '#000000']
+  };
+  // --------------------------------------------
 
-  <!-- THEME SWITCHER -->
-  <div class="theme-switcher">
-    <button class="purple" onclick="setTheme('purple')">Purple</button>
-    <button class="blue" onclick="setTheme('blue')">Blue</button>
-    <button class="yellow" onclick="setTheme('yellow')">Yellow</button>
-    <button class="red" onclick="setTheme('red')">Red</button>
-  </div>
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
 
-  <!-- HERO -->
-  <section class="hero">
-    <h1 id="typing-name"></h1>
-    <p id="typing-desc"></p>
+  let W = canvas.width = innerWidth;
+  let H = canvas.height = innerHeight;
+  let cx = W/2, cy = H/2;
 
-    <div class="identity">
-      <p><b>Nama:</b> Muhammad Azka Arota Faslah</p>
-      <p><b>NPM:</b> 2410010514</p>
-      <p><b>Kelas:</b> 3O Regular Pagi</p>
-    </div>
-  </section>
+  // responsiveness
+  window.addEventListener('resize', ()=>{
+    W = canvas.width = innerWidth;
+    H = canvas.height = innerHeight;
+    cx = W/2; cy = H/2;
+  });
 
+  // utility
+  const rand = (a=0,b=1)=> a + Math.random()*(b-a);
+
+  // create background stars
+  const stars = new Array(CONFIG.starCount).fill(0).map(()=>{
+    return {
+      x: rand(0,W), y: rand(0,H),
+      size: Math.random()*1.6 + 0.4,
+      brightness: rand(0.2,1)
+    };
+  });
+
+  // create disk particles (accretion disk)
+  const disk = new Array(CONFIG.diskParticleCount).fill(0).map(()=>{
+    const angle = rand(0,Math.PI*2);
+    const r = Math.sqrt(Math.random()) * (CONFIG.diskOuter - CONFIG.diskInner) + CONFIG.diskInner;
+    const speed = (0.6 + Math.random()*1.6) * CONFIG.spin;
+    const spread = rand(-0.6,0.6);
+    const hue = rand(260, 300); // purple range
+    return {angle,r,speed,spread,hue};
+  });
+
+  // draw background gradient
+  function drawBackground(){
+    const g = ctx.createLinearGradient(0,0,W,H);
+    const cols = CONFIG.backgroundGradient;
+    g.addColorStop(0, cols[0]);
+    g.addColorStop(0.6, cols[1]);
+    g.addColorStop(1, cols[2]);
+    ctx.fillStyle = g;
+    ctx.fillRect(0,0,W,H);
+  }
+
+  // gravitational lensing: warp a point (x,y) around center
+  function lens(x,y){
+    const dx = x - cx;
+    const dy = y - cy;
+    const r = Math.sqrt(dx*dx + dy*dy);
+    if (r === 0) return {x,y};
+    // displacement - stronger near center
+    const s = CONFIG.lensingStrength;
+    const factor = 1 + (s / (r + 20)) * 0.0008; // tweak constants for look
+    return {x: cx + dx*factor, y: cy + dy*factor, r};
+  }
+
+  // draw background stars with lensing distortion
+  function drawStars(t){
+    for(const st of stars){
+      const p = lens(st.x, st.y);
+      const flick = Math.sin((t*0.001 + st.x*0.0003)) * 0.2 + 0.8;
+      ctx.globalAlpha = Math.min(1, st.brightness * flick);
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, st.size, 0, Math.PI*2);
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // draw the photon ring and event horizon
+  function drawBlackHole(t){
+    const horizonR = Math.max(28, CONFIG.diskInner*0.32);
+    // glow / accretion reflection (soft)
+    const grd = ctx.createRadialGradient(cx,cy,horizonR, cx,cy,horizonR*6);
+    grd.addColorStop(0, `rgba(200, 120, 255, ${0.35 * CONFIG.glowIntensity})`);
+    grd.addColorStop(0.5, `rgba(160, 60, 255, ${0.18 * CONFIG.glowIntensity})`);
+    grd.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = grd;
+    ctx.beginPath(); ctx.arc(cx,cy,horizonR*6,0,Math.PI*2); ctx.fill();
+
+    // photon ring (bright thin ring)
+    const ringR = horizonR * 1.9;
+    ctx.save();
+    ctx.translate(cx,cy);
+    const shimmer = 0.5 + Math.sin(t*0.003)*0.5;
+    for(let i=0;i<8;i++){
+      ctx.beginPath();
+      ctx.lineWidth = 2 + i*0.4;
+      ctx.strokeStyle = `rgba(200, ${120 + i*6}, ${200 + i*3}, ${0.06*shimmer})`;
+      ctx.arc(0,0,ringR + i*1.6,0,Math.PI*2);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // event horizon (solid black circle)
+    ctx.beginPath();
+    ctx.fillStyle = '#000';
+    ctx.arc(cx,cy,horizonR,0,Math.PI*2);
+    ctx.fill();
+  }
+
+  // draw accretion disk particles
+  function drawDisk(t, dt){
+    for(const p of disk){
+      // angular velocity inversely proportional to sqrt(r)
+      const angularSpeed = p.speed * 0.0008 / Math.sqrt(p.r/100) ;
+      p.angle += angularSpeed * dt;
+      // eccentricity / wobble
+      const wobble = Math.sin((t*0.0003 + p.angle*2.3))*p.spread;
+      const x = cx + Math.cos(p.angle) * (p.r + wobble*6);
+      const y = cy + Math.sin(p.angle) * (p.r + wobble*2);
+
+      // apply lensing push for points near center (gives bent light)
+      const l = lens(x,y);
+      const depth = (p.r - CONFIG.diskInner) / (CONFIG.diskOuter - CONFIG.diskInner);
+      const size = 1.0 + (1-depth)*1.8;
+
+      // color shifts along disk: inner hot -> brighter purple, outer cooler -> darker
+      const hue = Math.floor(p.hue + 20 * (1-depth));
+      const alpha = 0.2 + 0.8*(1-depth);
+
+      ctx.globalAlpha = alpha;
+      ctx.beginPath();
+      ctx.ellipse(l.x, l.y, size, size*0.6, 0, 0, Math.PI*2);
+      ctx.fillStyle = `hsla(${hue}, 90%, ${40 + 25*(1-depth)}%, 1)`;
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // subtle frame vignette for cinematic look
+  function drawVignette(){
+    const g = ctx.createRadialGradient(cx,cy,Math.max(W,H)/4, cx,cy,Math.max(W,H)/1.1);
+    g.addColorStop(0, 'rgba(0,0,0,0)');
+    g.addColorStop(0.7, 'rgba(0,0,0,0.25)');
+    g.addColorStop(1, 'rgba(0,0,0,0.65)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0,0,W,H);
+  }
+
+  // --- Planet being sucked into black hole ---
+  let planet = { x: cx + 400, y: cy - 50, r: 32, vx: -0.06, vy: 0.015 };
+
+  function drawPlanet(dt){
+    // update velocity toward center
+    const dx = cx - planet.x;
+    const dy = cy - planet.y;
+    const dist = Math.sqrt(dx*dx + dy*dy) || 1;
+    const pull = 0.0004 * dt; // gravity strength
+
+    planet.vx += (dx/dist) * pull;
+    planet.vy += (dy/dist) * pull;
+
+    planet.x += planet.vx * dt;
+    planet.y += planet.vy * dt;
+
+    // draw
+    ctx.save();
+    const grd = ctx.createRadialGradient(planet.x,planet.y,2, planet.x,planet.y,planet.r);
+    grd.addColorStop(0,'rgba(180,120,255,1)');
+    grd.addColorStop(1,'rgba(80,0,150,0.4)');
+
+    ctx.fillStyle = grd;
+    ctx.beginPath();
+    ctx.arc(planet.x,planet.y,planet.r,0,Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // main loop
+  let last = performance.now();
+  let running = true; // toggle untuk mati/nyala
+  function loop(now){
+    const dt = now - last;
+    last = now;
+
+    if(running){
+      // background
+      drawBackground();
+
+      // stars
+      drawStars(now);
+
+      // disk
+      drawDisk(now, dt);
+
+      // black hole center
+drawBlackHole(now);
+
+// planet suction
+drawPlanet(dt);
+
+      // vignette
+      drawVignette();
+    } else {
+      // saat mati: masih gambar background statis agar layar tidak kosong
+      drawBackground();
+      drawVignette();
+    }
+
+    requestAnimationFrame(loop);
+  }
+
+  requestAnimationFrame(loop);
+
+  // klik untuk toggle mati/nyala; double-click untuk flash interaktif
   
-  <script src="script.js"></script>
+  canvas.addEventListener('dblclick', (e)=>{
+    const flash = ctx.createRadialGradient(e.clientX,e.clientY,0,e.clientX,e.clientY,200);
+    flash.addColorStop(0,'rgba(200,160,255,0.45)');
+    flash.addColorStop(1,'rgba(200,160,255,0)');
+    ctx.fillStyle = flash;
+    ctx.fillRect(0,0,W,H);
+  });
+
+  </script>
 </body>
 </html>
